@@ -133,6 +133,8 @@ void os_ls_files(int process_id) {
 void os_frame_bitmap() {
     unsigned char frame_bitmap_bytes[8192];  
     fseek(m_path, 139392, SEEK_SET);
+
+    // Leer los 8192 bytes del frame bitmap
     fread(frame_bitmap_bytes, 1, 8192, m_path);
     int occupied_frames = 0;
     int free_frames = 0;
@@ -141,6 +143,7 @@ void os_frame_bitmap() {
         printf("byte %d: ", i);
 
         for(int j = 0; j < 8; j++) {
+            // Extrae el bit j del byte en frame_bitmap_bytes[i]
             unsigned char bit = (frame_bitmap_bytes[i] >> j) & 1;
             printf("bit %d: %d  -  ", j, bit);
             
@@ -158,7 +161,10 @@ void os_frame_bitmap() {
 void os_tp_bitmap() {
     unsigned char tp_bitmap_bytes[128];  
     fseek(m_path, 8192, SEEK_SET);
+
+    // Leer los 128 bytes del bitmap de tabla de paginas
     fread(tp_bitmap_bytes, 1, 128, m_path);
+
     int occupied_frames = 0;
     int free_frames = 0;
 
@@ -166,6 +172,7 @@ void os_tp_bitmap() {
         printf("byte %d: ", i);
         
         for(int j = 0; j < 8; j++) {
+            // Extrae el bit j del byte en frame_bitmap_bytes[i]
             unsigned char bit = (tp_bitmap_bytes[i] >> j) & 1;
             printf("bit %d: %d  -  ", j, bit);
             
@@ -181,5 +188,30 @@ void os_tp_bitmap() {
 }
 
 void os_start_process(int process_id, char* process_name) {
-    
+    unsigned char pcb_entry[256];
+    fseek(m_path, 0, SEEK_SET);
+
+    for (int i = 0; i < 32; i++) {
+        fread(pcb_entry, 1, 256, m_path);
+        unsigned char state = pcb_entry[0];
+
+        if(state == 0) {
+            // Se ingresan los datos del proceso nuevo
+            pcb_entry[0] = 1;
+            pcb_entry[1] = (unsigned char) process_id;
+            strncpy((char*)&pcb_entry[2], process_name, 11);
+            for (int j = strlen(process_name); j < 11; j++) {
+                pcb_entry[2 + j] = 0x00;
+            }
+
+            // Se copia el numero 0 en todo el espacio de la tabla de archivos y la tabla de paginas de primer orden
+            memset(&pcb_entry[13], 0, 115);
+            memset(&pcb_entry[128], 0, 128);
+
+            // Se ubica en la posicion (num de entrada * tamaño de entrada) y se reescribe la entrada con los datos nuevos
+            fseek(m_path, i*256, SEEK_SET);
+            fwrite(pcb_entry, 1, 256, m_path);
+            break;
+        }
+    }
 }
