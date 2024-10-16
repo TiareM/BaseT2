@@ -38,7 +38,9 @@ int main(int argc, char const *argv[])
     printf("-----------------\n");
     os_ls_processes();
 
-    os_finish_process(117);
+    printf("os_finish_process(162)\n");
+    printf("----------------------\n\n");
+    os_finish_process(162);
 
     fclose(m_path);
     return 0;

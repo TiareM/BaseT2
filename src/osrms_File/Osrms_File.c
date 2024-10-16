@@ -4,65 +4,6 @@
 #include <stdbool.h>
 #include "Osrms_File.h"
 
-// Función para inicializar la memoria OSRMS
-void initialize_osrms_memory(OSRMSMemory *memory) {
-    memory->memory = (uint8_t *)malloc(SIZE_PCB_TABLE + SIZE_BITMAP_PAGE_TABLE + SIZE_SECOND_PAGE_TABLE + SIZE_FRAME_BITMAP + NUM_FRAMES * SIZE_FRAME);
-    //Aqui considere que el dir es el numero de frames * el tamanho de cada frame (relativa a los ultimos 2 Gb)
-    memset(memory->memory, 0, SIZE_VIRTUAL_MEM);
-    memset(memory->pcb_table, 0, sizeof(memory->pcb_table));
-    memset(memory->bitmap_page_tables, 0, BITMAP_SIZE);
-    memset(memory->second_page_tables, 0, SIZE_SECOND_PAGE_TABLE);
-    memset(memory->frame_bitmap, 0, SIZE_FRAME_BITMAP);
-    memory->num_frames = NUM_FRAMES;
-}
-
-int allocate_process(OSRMSMemory *memory, uint8_t pid, const char *process_name) {
-    // Buscar un PCB disponible
-    for (int i = 0; i < NUM_PCBS; i++) {
-        if (memory->pcb_table[i].estado == 0x00) { // 0x00: inactivo
-            // Asignar el proceso
-            memory->pcb_table[i].estado = 0x01;  // 0x01: en ejecución
-            memory->pcb_table[i].pid = pid;
-            strncpy(memory->pcb_table[i].process_name, process_name, 10);
-            memory->pcb_table[i].process_name[10] = '\0'; 
-            // Inicializando valores
-            memset(memory->pcb_table[i].file_table, 0, sizeof(memory->pcb_table[i].file_table));
-            memset(memory->pcb_table[i].first_level_page_table, 0, sizeof(memory->pcb_table[i].first_level_page_table));
-            return 0; 
-        }
-    }
-    return -1;
-}
-
-
-void free_process(OSRMSMemory *memory, uint8_t pid) {
-    // Buscar el proceso correspondiente por PID
-    PCB *pcb = NULL;
-    for (int i = 0; i < NUM_PCBS; i++) {
-        if (memory->pcb_table[i].pid == pid) {
-            pcb = &memory->pcb_table[i];
-            break;
-        }
-    }
-
-    if (pcb == NULL) {
-        return; 
-    }
-
-    pcb->estado =  0x00; // 0x00: inactivo
-
-    // Liberar todos los archivos asignados al proceso
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (pcb->file_table[i].valid ==  0x01) {
-            printf("Liberando archivo '%s' del proceso PID %d.\n", pcb->file_table[i].filename, pid);
-            pcb->file_table[i].valid =  0x00;  // Marcar archivo como inválido
-        }
-    }
-
-    memset(pcb->first_level_page_table, 0, sizeof(pcb->first_level_page_table));
-}
-
-
 uint32_t translate_virtual_address(OSRMSMemory *memory, uint8_t pid, uint32_t virtual_address) {
     PCB *pcb = NULL;
     for (int i = 0; i < NUM_PCBS; i++) {

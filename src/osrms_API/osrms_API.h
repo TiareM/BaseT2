@@ -14,6 +14,6 @@ void os_tp_bitmap();
 
 // Funciones para procesos
 void os_start_process(int process_id, char* process_name);
-// void os_finish_process(int process_id);
+void os_finish_process(int process_id);
 
 // Funciones para archivos

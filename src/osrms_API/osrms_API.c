@@ -215,3 +215,104 @@ void os_start_process(int process_id, char* process_name) {
         }
     }
 }
+
+void free_memory_process(int entry, uint32_t  virtual_address) {
+    unsigned char pcb_entry[256];
+    fseek(m_path, 0, SEEK_SET);
+    fseek(m_path, entry * 256, SEEK_SET);
+    fread(pcb_entry, 1, 256, m_path);
+
+    // Se calcula el vpn y el offset de la direccion virtual
+    unsigned int vpn = (virtual_address >> 15) & 12;
+    // unsigned int offset = virtual_address & 15;
+
+    // Se obtienen los primeros 6 bits del vpn para la tabla de páginas de primer orden
+    uint8_t vpn1 = (vpn >> 6) & 0x3F;
+    // Se obtienen los ultimos 6 bits del vpn para la tabla de paginas de segundo Orden
+    uint8_t vpn2 = vpn & 0x3F;
+
+    unsigned int first_table_entry[128];      // Tabla de paginas de primer orded
+    unsigned int second_table_page[128];    // Tabla de paginas de segundo orden
+    unsigned char page_table_bitmap[128];   // Bitmap de tablas de paginas
+    unsigned char frame_bitmap[8192];
+
+    memcpy(first_table_entry, &pcb_entry[128], 128);
+
+    // Se obtiene el frame bitmap
+    fseek(m_path, 139392, SEEK_SET);
+    fread(frame_bitmap, 1, 8192, m_path); 
+
+    // Se obtiene el bitmap de tablas de paginas
+    fseek(m_path, 8192, SEEK_SET);
+    fread(page_table_bitmap, 1, 128, m_path); 
+
+    // // Se obtiene la tabla de paginas de primer orden del proceso
+    // fseek(m_path, entry * 256 + 128, SEEK_SET);
+    // fread(first_table_entry, 1, 128, m_path);
+
+    // Se forma el numero que entrega la tabla de primer orden
+    uint16_t n_first_entry = (first_table_entry[vpn1 * 2] << 8) | first_table_entry[vpn1 * 2 + 1];
+
+    // Cambia el bit n_first entry por un 0
+    page_table_bitmap[n_first_entry / 8] &= ~(1 << (n_first_entry % 8));
+    fseek(m_path, 8192, SEEK_SET);
+    fwrite(page_table_bitmap, 1, 128, m_path);
+
+    // Se obtiene la tabla de paginas de segundo orden a partir del numero obtenido antes
+    fseek(m_path, 8320 + n_first_entry * 128, SEEK_SET);
+    fread(second_table_page, 1, 128, m_path);
+
+    // Se forma el numero que entrega la tabla de segundo orden
+    uint16_t pfn = (second_table_page[vpn2* 2] << 8) | second_table_page[vpn2 * 2 + 1];
+
+    // Cambia el bit igual al pfn por un 0 en el frame bitmap
+    frame_bitmap[pfn / 8] &= ~(1 << (pfn % 8));
+    fseek(m_path, 139392, SEEK_SET);
+    fwrite(frame_bitmap, 1, 8192, m_path);
+
+    // Se calcula la direccion fisica a partir de l pfn y el offset 
+    // uint32_t direccion_fisica = (pfn << 15) | offset;   
+}
+
+void os_finish_process(int process_id) {
+    unsigned char pcb_entry[256];
+    fseek(m_path, 0, SEEK_SET);
+
+    for (int i = 0; i < 32; i++) {
+        // Se obtien el estado y el id del proceso
+        fread(pcb_entry, 1, 256, m_path);
+        unsigned char state = pcb_entry[0];
+        unsigned char id = pcb_entry[1];
+
+        if(state == 1 && id == process_id) {
+            // Se invalida la entrada del proceso
+            pcb_entry[0] = 0;
+
+            // Se copian los cambios a la memoria
+            fseek(m_path, i*256, SEEK_SET);
+            fwrite(pcb_entry, 1, 256, m_path);
+
+            // Se obtiene la direccion desde donde empieza la tabla de archivos
+            unsigned char* file_table = &pcb_entry[13];
+
+            for(int j = 0; j < 5; j++) {
+                // Se obtiene la entrada de cada archivo y se lee su validez
+                unsigned char* file_entry = &file_table[j * 23];
+                unsigned char file_validity = file_entry[0];
+
+                if (file_validity == 1) {
+                    // Se invalida el archivo
+                    file_entry[0] = 0;
+
+                    uint32_t  virtual_address = (file_entry[19] << 24) | (file_entry[20] << 16) | (file_entry[21] << 8) | file_entry[22];
+
+                    free_memory_process(i, virtual_address);
+
+                    // Se copian los cambios a la memoria
+                    fseek(m_path, i*256, SEEK_SET);
+                    fwrite(pcb_entry, 1, 256, m_path);
+                }
+            }
+        }
+    }
+}
