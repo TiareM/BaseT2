@@ -31,7 +31,7 @@ int main(int argc, char const *argv[])
     printf("--------------\n");
     os_tp_bitmap();
 
-    printf("os_start_process(34, \"nuevo\")\n");
+    printf("os_start_process(43, \"nuevo\")\n");
     printf("-----------------------------\n\n");
     os_start_process(43, "nuevo");
     printf("os_ls_processes()\n");
